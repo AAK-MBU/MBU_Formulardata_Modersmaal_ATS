@@ -1,13 +1,13 @@
 """Module to handle item processing"""
 
+import os
 import logging
+
+from io import BytesIO
 
 import pandas as pd
 
 from dotenv import load_dotenv
-
-from io import BytesIO
-
 
 from mbu_msoffice_integration.sharepoint_class import Sharepoint
 
@@ -20,10 +20,17 @@ SHAREPOINT_DOCUMENT_LIBRARY = "Delte dokumenter"
 
 SHEET_NAME = "Besvarelser"
 
+SHAREPOINT_KWARGS = {
+    "tenant": os.getenv("TENANT"),
+    "client_id": os.getenv("CLIENT_ID"),
+    "thumbprint": os.getenv("APPREG_THUMBPRINT"),
+    "cert_path": os.getenv("GRAPH_CERT_PEM"),
+}
+
 logger = logging.getLogger(__name__)
 
 
-def process_item(item_data: dict, sharepoint_kwargs: dict):
+def process_item(item_data: dict):
     """Function to handle item processing"""
 
     forn_config = item_data.get("config", {})
@@ -42,10 +49,10 @@ def process_item(item_data: dict, sharepoint_kwargs: dict):
 
     try:
         sharepoint_api = Sharepoint(
-            tenant=sharepoint_kwargs["tenant"],
-            client_id=sharepoint_kwargs["client_id"],
-            thumbprint=sharepoint_kwargs["thumbprint"],
-            cert_path=sharepoint_kwargs["cert_path"],
+            tenant=SHAREPOINT_KWARGS["tenant"],
+            client_id=SHAREPOINT_KWARGS["client_id"],
+            thumbprint=SHAREPOINT_KWARGS["thumbprint"],
+            cert_path=SHAREPOINT_KWARGS["cert_path"],
             site_url=SHAREPOINT_SITE_URL,
             site_name=site_name,
             document_library=SHAREPOINT_DOCUMENT_LIBRARY,

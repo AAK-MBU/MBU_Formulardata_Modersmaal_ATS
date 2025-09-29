@@ -1,6 +1,5 @@
 """Module to hande queue population"""
 
-import sys
 import os
 import asyncio
 import logging
@@ -9,12 +8,6 @@ import json
 from automation_server_client import Workqueue
 
 import datetime
-
-from io import BytesIO
-
-import pandas as pd
-
-from mbu_msoffice_integration.sharepoint_class import Sharepoint
 
 from helpers import config
 
@@ -91,56 +84,6 @@ def retrieve_items_for_queue() -> list[dict]:
     print()
 
     return queue_items
-
-    sys.exit()
-
-    new_forms_df = pd.DataFrame(new_forms)
-
-    # Sort by "Serial number" in descending order
-    new_forms_df.sort_values(by="Ønsket sprog", ascending=True, inplace=True)
-
-    # Save the updated DataFrame to an in-memory Excel file
-    updated_excel_stream = BytesIO()
-    new_forms_df.to_excel(updated_excel_stream, index=False, engine="openpyxl")
-    updated_excel_stream.seek(0)
-
-    # Apply formatting and get the formatted stream
-    formatted_stream = format_excel_file(updated_excel_stream)
-
-    # # --- Save a local copy for debugging ---
-    # local_path = fr"C:\tmp\manuel\{excel_file_name}"
-    # with open(local_path, "wb") as f:
-    #     f.write(formatted_stream.getvalue())
-    # print(f"Saved local copy to {local_path}")
-
-    print("heloooooooooooooo DADJ")
-    exit()
-
-    # Upload the formatted Excel file to SharePoint
-    sharepoint_api.upload_file_from_bytes(
-        binary_content=formatted_stream.getvalue(),
-        file_name=excel_file_name,
-        folder_name=folder_name
-    )
-
-
-    sys.exit()
-
-    # Loop through all active submissions and transform them to the correct format
-    logger.info("STEP 4 - Looping submissions and mapping retrieved data to fit Excel column names.")
-    for form in all_submissions:
-        form_serial_number = form["entity"]["serial"][0]["value"]
-
-        transformed_row = helper_functions.transform_form_submission(
-            form_serial_number,
-            form,
-            formular_mapping
-        )
-
-        if "formular_mapping" in form_config:
-            del form_config["formular_mapping"]
-
-        submissions.append(transformed_row)
 
 
 def create_sort_key(item: dict) -> str:

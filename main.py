@@ -4,9 +4,7 @@ This is the main entry point for the process
 
 import asyncio
 import logging
-import os
 import sys
-import datetime
 
 from dotenv import load_dotenv
 
@@ -30,27 +28,20 @@ load_dotenv()  # Loads variables from .env
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
 # This block disables SSL verification and overrides env vars
-import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_old_request = requests.Session.request
-def unsafe_request(self, *args, **kwargs):
-    kwargs['verify'] = False
-    return _old_request(self, *args, **kwargs)
-requests.Session.request = unsafe_request
+# import requests
+# import urllib3
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# _old_request = requests.Session.request
+# def unsafe_request(self, *args, **kwargs):
+#     kwargs['verify'] = False
+#     return _old_request(self, *args, **kwargs)
+# requests.Session.request = unsafe_request
 # ╔══════════════════════════════════════════════╗
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
 
 
 logger = logging.getLogger(__name__)
-
-SHAREPOINT_KWARGS = {
-    "tenant": os.getenv("TENANT"),
-    "client_id": os.getenv("CLIENT_ID"),
-    "thumbprint": os.getenv("APPREG_THUMBPRINT"),
-    "cert_path": os.getenv("GRAPH_CERT_PEM"),
-}
 
 
 async def populate_queue(workqueue: Workqueue):
@@ -93,7 +84,7 @@ async def process_workqueue(workqueue: Workqueue):
 
                     try:
                         logger.info(f"Processing item with reference: {reference}")
-                        completed_message = process_item(item_data=data, sharepoint_kwargs=SHAREPOINT_KWARGS)
+                        completed_message = process_item(item_data=data)
 
                         logger.info(f"Finished processing item with reference: {reference}")
 
