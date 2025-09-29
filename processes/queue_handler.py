@@ -26,10 +26,10 @@ def retrieve_items_for_queue() -> list[dict]:
     form_config = config.MODERSMAAL_CONFIG
 
     ### FOR DEV TESTING ONLY - OVERRIDE SITE AND FOLDER NAME TO AVOID POLLUTING ACTUAL FOLDERS ###
-    testing = True
-    if testing:
-        form_config["site_name"] = "MBURPA"
-        form_config["folder_name"] = "Automation_Server"
+    # testing = True
+    # if testing:
+    #     form_config["site_name"] = "MBURPA"
+    #     form_config["folder_name"] = "Automation_Server"
     ### FOR DEV TESTING ONLY - OVERRIDE SITE AND FOLDER NAME TO AVOID POLLUTING ACTUAL FOLDERS ###
 
     submissions = []
