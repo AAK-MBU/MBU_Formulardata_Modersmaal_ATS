@@ -111,7 +111,7 @@ def process_item(item_data: dict):
             folder_name=folder_name,
             excel_file_name=excel_file_name,
             sheet_name=SHEET_NAME,
-            sorting_keys=[{"key": "A", "ascending": False, "type": "int"}],
+            sorting_keys=[{"key": "Ønsket sprog", "ascending": True, "type": "str"}],
             bold_rows=[1],
             align_horizontal="left",
             align_vertical="top",
