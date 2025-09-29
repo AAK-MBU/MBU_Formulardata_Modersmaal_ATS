@@ -2,47 +2,31 @@
 
 import logging
 
-APP = None
-logger = logging.getLogger(__name__)
 
-
-def get_app():
-    """Function to get the application instance"""
-    # ruff: noqa: PLW0602
-    global APP
-    return APP
-
-
-def startup():
+def startup(logger: logging.Logger):
     """Function for starting applications"""
     logger.info("Starting applications...")
 
-    # This part adds the app to the global var after startup,
-    # and allows other files to use get_app() to get the app instance from the startup
-    # # ruff: noqa: PLW0603
-    # global APP
-    # APP = solteq_app
 
-
-def soft_close():
+def soft_close(logger: logging.Logger):
     """Function for closing applications softly"""
     logger.info("Closing applications softly...")
 
 
-def hard_close():
+def hard_close(logger: logging.Logger):
     """Function for closing applications hard"""
     logger.info("Closing applications hard...")
 
 
-def close():
+def close(logger: logging.Logger):
     """Function for closing applications softly or hardly if necessary"""
     try:
-        soft_close()
+        soft_close(logger)
     except Exception:
-        hard_close()
+        hard_close(logger)
 
 
-def reset():
+def reset(logger: logging.Logger):
     """Function for resetting application"""
-    close()
-    startup()
+    close(logger)
+    startup(logger)

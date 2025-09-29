@@ -8,7 +8,7 @@ from automation_server_client import WorkItem, Workqueue
 from dotenv import load_dotenv
 
 
-def get_workqueue_items(workqueue: Workqueue, return_data=False):
+def get_workqueue_items(workqueue: Workqueue):
     """
     Retrieve items from the specified workqueue.
     If the queue is empty, return an empty list.
@@ -18,13 +18,14 @@ def get_workqueue_items(workqueue: Workqueue, return_data=False):
     url = os.getenv("ATS_URL")
     token = os.getenv("ATS_TOKEN")
 
+    workqueue_items = set()
+
     if not url or not token:
-        raise OSError("ATS_URL or ATS_TOKEN is not set in the environment")
+        raise EnvironmentError("ATS_URL or ATS_TOKEN is not set in the environment")
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    workqueue_items = {} if return_data else set()
-
+    workqueue_items = set()
     page = 1
     size = 200  # max allowed
 
@@ -41,10 +42,7 @@ def get_workqueue_items(workqueue: Workqueue, return_data=False):
         for row in res_json:
             ref = row.get("reference")
             if ref:
-                if return_data:
-                    workqueue_items[ref] = row
-                else:
-                    workqueue_items.add(ref)
+                workqueue_items.add(ref)
 
         page += 1
 

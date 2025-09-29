@@ -1,26 +1,146 @@
 """Module to hande queue population"""
 
+import sys
+import os
 import asyncio
-import json
 import logging
+import json
 
 from automation_server_client import Workqueue
 
+import datetime
+
+from io import BytesIO
+
+import pandas as pd
+
+from mbu_msoffice_integration.sharepoint_class import Sharepoint
+
 from helpers import config
+
+from helpers import helper_functions
 
 logger = logging.getLogger(__name__)
 
 
 def retrieve_items_for_queue() -> list[dict]:
-    """Function to populate queue"""
-    data = []
-    references = []
+    """
+    Function to populate the workqueue with items.
+    """
 
-    items = [
-        {"reference": ref, "data": d} for ref, d in zip(references, data, strict=True)
-    ]
+    db_conn_string = os.getenv("DBCONNECTIONSTRINGPROD")
 
-    return items
+    form_config = config.MODERSMAAL_CONFIG
+
+    ### FOR DEV TESTING ONLY - OVERRIDE SITE AND FOLDER NAME TO AVOID POLLUTING ACTUAL FOLDERS ###
+    testing = True
+    if testing:
+        form_config["site_name"] = "MBURPA"
+        form_config["folder_name"] = "Automation_Server"
+    ### FOR DEV TESTING ONLY - OVERRIDE SITE AND FOLDER NAME TO AVOID POLLUTING ACTUAL FOLDERS ###
+
+    submissions = []
+
+    # today = datetime.date(2025, 9, 22)
+    today = datetime.date.today()
+    monday_last_week = today - datetime.timedelta(days=today.weekday() + 7)
+    sunday_last_week = today - datetime.timedelta(days=today.weekday() + 1)
+
+    os2_webform_id = form_config["os2_webform_id"]
+
+    form_config["excel_file_name"] = str(form_config["excel_file_name"]).replace("monday_last_week", monday_last_week.strftime("%Y-%m-%d")).replace("sunday_last_week", sunday_last_week.strftime("%Y-%m-%d"))
+
+    formular_mapping = form_config["formular_mapping"]
+    del form_config["formular_mapping"]
+
+    logger.info("STEP 1 - Fetching all active submissions.")
+    all_submissions = helper_functions.get_forms_data(
+        conn_string=db_conn_string,
+        form_type=os2_webform_id,
+    )
+
+    logger.info(f"OS2 submissions retrieved. {len(all_submissions)} total submissions found.")
+
+    logger.info("STEP 2 - Looping fetched submissions, looking for last weeks' submissions.")
+    for form in all_submissions:
+        form_serial_number = form["entity"]["serial"][0]["value"]
+
+        completed_str = form["entity"]["completed"][0]["value"]
+
+        if completed_str:
+            completed_time = datetime.datetime.fromisoformat(completed_str).date()
+
+            if monday_last_week <= completed_time <= sunday_last_week:
+                transformed_row = helper_functions.transform_form_submission(form_serial_number, form, formular_mapping)
+
+                submissions.append(transformed_row)
+
+    logger.info(f"OS2 submissions looped. {len(submissions)} in the previous week.")
+
+    work_item_data = {
+        "reference": f"{os2_webform_id}_{today}",
+        "data": {"config": form_config, "submissions": submissions},
+    }
+
+    if "formular_mapping" in form_config:
+        del form_config["formular_mapping"]
+
+    queue_items = [work_item_data]
+
+    print()
+    print()
+
+    return queue_items
+
+    sys.exit()
+
+    new_forms_df = pd.DataFrame(new_forms)
+
+    # Sort by "Serial number" in descending order
+    new_forms_df.sort_values(by="Ønsket sprog", ascending=True, inplace=True)
+
+    # Save the updated DataFrame to an in-memory Excel file
+    updated_excel_stream = BytesIO()
+    new_forms_df.to_excel(updated_excel_stream, index=False, engine="openpyxl")
+    updated_excel_stream.seek(0)
+
+    # Apply formatting and get the formatted stream
+    formatted_stream = format_excel_file(updated_excel_stream)
+
+    # # --- Save a local copy for debugging ---
+    # local_path = fr"C:\tmp\manuel\{excel_file_name}"
+    # with open(local_path, "wb") as f:
+    #     f.write(formatted_stream.getvalue())
+    # print(f"Saved local copy to {local_path}")
+
+    print("heloooooooooooooo DADJ")
+    exit()
+
+    # Upload the formatted Excel file to SharePoint
+    sharepoint_api.upload_file_from_bytes(
+        binary_content=formatted_stream.getvalue(),
+        file_name=excel_file_name,
+        folder_name=folder_name
+    )
+
+
+    sys.exit()
+
+    # Loop through all active submissions and transform them to the correct format
+    logger.info("STEP 4 - Looping submissions and mapping retrieved data to fit Excel column names.")
+    for form in all_submissions:
+        form_serial_number = form["entity"]["serial"][0]["value"]
+
+        transformed_row = helper_functions.transform_form_submission(
+            form_serial_number,
+            form,
+            formular_mapping
+        )
+
+        if "formular_mapping" in form_config:
+            del form_config["formular_mapping"]
+
+        submissions.append(transformed_row)
 
 
 def create_sort_key(item: dict) -> str:
@@ -39,6 +159,7 @@ async def concurrent_add(workqueue: Workqueue, items: list[dict]) -> None:
     Args:
         workqueue (Workqueue): The workqueue to populate.
         items (list[dict]): List of items to add to the queue.
+        logger (logging.Logger): Logger for logging messages.
 
     Returns:
         None
@@ -56,28 +177,21 @@ async def concurrent_add(workqueue: Workqueue, items: list[dict]) -> None:
             for attempt in range(1, config.MAX_RETRIES + 1):
                 try:
                     await asyncio.to_thread(workqueue.add_item, data, reference)
-                    logger.info("Added item to queue with reference: %s", reference)
+                    logger.info(f"Added item to queue with reference: {reference}")
                     return True
 
                 except Exception as e:
                     if attempt >= config.MAX_RETRIES:
                         logger.error(
-                            "Failed to add item %s after %d attempts: %s",
-                            reference,
-                            attempt,
-                            e,
+                            f"Failed to add item {reference} after {attempt} attempts: {e}"
                         )
                         return False
 
                     backoff = config.RETRY_BASE_DELAY * (2 ** (attempt - 1))
 
                     logger.warning(
-                        "Error adding %s (attempt %d/%d). Retrying in %.2fs... %s",
-                        reference,
-                        attempt,
-                        config.MAX_RETRIES,
-                        backoff,
-                        e,
+                        f"Error adding {reference} (attempt {attempt}/{config.MAX_RETRIES}). "
+                        f"Retrying in {backoff:.2f}s... {e}"
                     )
                     await asyncio.sleep(backoff)
 
@@ -87,7 +201,7 @@ async def concurrent_add(workqueue: Workqueue, items: list[dict]) -> None:
 
     sorted_items = sorted(items, key=create_sort_key)
     logger.info(
-        "Processing %d items sorted by complete JSON structure", len(sorted_items)
+        f"Processing {len(sorted_items)} items sorted by complete JSON structure"
     )
 
     results = await asyncio.gather(*(add_one(i) for i in sorted_items))
@@ -95,5 +209,5 @@ async def concurrent_add(workqueue: Workqueue, items: list[dict]) -> None:
     failures = len(results) - successes
 
     logger.info(
-        "Summary: %d succeeded, %d failed out of %d", successes, failures, len(results)
+        f"Summary: {successes} succeeded, {failures} failed out of {len(results)}"
     )

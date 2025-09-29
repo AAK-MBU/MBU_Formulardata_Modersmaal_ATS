@@ -4,20 +4,53 @@ This is the main entry point for the process
 
 import asyncio
 import logging
+import os
 import sys
+import datetime
+
+from dotenv import load_dotenv
 
 from automation_server_client import AutomationServer, Workqueue
+
 from mbu_rpa_core.exceptions import BusinessError, ProcessError
 from mbu_rpa_core.process_states import CompletedState
 
 from helpers import ats_functions, config
+
 from processes.application_handler import close, reset, startup
 from processes.error_handling import ErrorContext, handle_error
 from processes.finalize_process import finalize_process
 from processes.process_item import process_item
 from processes.queue_handler import concurrent_add, retrieve_items_for_queue
 
+load_dotenv()  # Loads variables from .env
+
+
+# ╔══════════════════════════════════════════════╗
+# ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
+# ╚══════════════════════════════════════════════╝
+# This block disables SSL verification and overrides env vars
+import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_old_request = requests.Session.request
+def unsafe_request(self, *args, **kwargs):
+    kwargs['verify'] = False
+    return _old_request(self, *args, **kwargs)
+requests.Session.request = unsafe_request
+# ╔══════════════════════════════════════════════╗
+# ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
+# ╚══════════════════════════════════════════════╝
+
+
 logger = logging.getLogger(__name__)
+
+SHAREPOINT_KWARGS = {
+    "tenant": os.getenv("TENANT"),
+    "client_id": os.getenv("CLIENT_ID"),
+    "thumbprint": os.getenv("APPREG_THUMBPRINT"),
+    "cert_path": os.getenv("GRAPH_CERT_PEM"),
+}
 
 
 async def populate_queue(workqueue: Workqueue):
@@ -30,16 +63,14 @@ async def populate_queue(workqueue: Workqueue):
     queue_references = {str(r) for r in ats_functions.get_workqueue_items(workqueue)}
 
     new_items: list[dict] = []
+
     for item in items_to_queue:
         reference = str(item.get("reference") or "")
+
         if reference and reference in queue_references:
-            logger.info(
-                "Reference: %s already in queue. Item: %s not added",
-                reference,
-                item,
-            )
-        else:
-            new_items.append(item)
+            continue
+
+        new_items.append(item)
 
     await concurrent_add(workqueue, new_items)
     logger.info("Finished populating workqueue.")
@@ -50,7 +81,7 @@ async def process_workqueue(workqueue: Workqueue):
 
     logger.info("Processing workqueue...")
 
-    startup()
+    startup(logger=logger)
 
     error_count = 0
 
@@ -61,12 +92,12 @@ async def process_workqueue(workqueue: Workqueue):
                     data, reference = ats_functions.get_item_info(item)
 
                     try:
-                        logger.info("Processing item with reference: %s", reference)
-                        process_item(data, reference)
+                        logger.info(f"Processing item with reference: {reference}")
+                        completed_message = process_item(item_data=data, sharepoint_kwargs=SHAREPOINT_KWARGS)
 
-                        completed_state = CompletedState.completed(
-                            "Process completed without exceptions"
-                        )
+                        logger.info(f"Finished processing item with reference: {reference}")
+
+                        completed_state = CompletedState.completed(completed_message)
                         item.complete(str(completed_state))
 
                         continue
@@ -78,6 +109,7 @@ async def process_workqueue(workqueue: Workqueue):
                             send_mail=False,
                             process_name=workqueue.name,
                         )
+
                         handle_error(
                             error=e,
                             log=logger.info,
@@ -86,6 +118,7 @@ async def process_workqueue(workqueue: Workqueue):
 
                     except Exception as e:
                         pe = ProcessError(str(e))
+
                         raise pe from e
 
             except ProcessError as e:
@@ -95,18 +128,21 @@ async def process_workqueue(workqueue: Workqueue):
                     send_mail=True,
                     process_name=workqueue.name,
                 )
+
                 handle_error(
                     error=e,
                     log=logger.error,
                     context=context,
                 )
+
                 error_count += 1
-                reset()
+
+                reset(logger=logger)
 
         break
 
     logger.info("Finished processing workqueue.")
-    close()
+    close(logger=logger)
 
 
 async def finalize(workqueue: Workqueue):
@@ -140,13 +176,16 @@ if __name__ == "__main__":
     prod_workqueue = ats.workqueue()
     process = ats.process
 
+    # Queue management
     if "--queue" in sys.argv:
         asyncio.run(populate_queue(prod_workqueue))
 
     if "--process" in sys.argv:
+        # Process workqueue
         asyncio.run(process_workqueue(prod_workqueue))
 
     if "--finalize" in sys.argv:
+        # Finalize process
         asyncio.run(finalize(prod_workqueue))
 
     sys.exit(0)
