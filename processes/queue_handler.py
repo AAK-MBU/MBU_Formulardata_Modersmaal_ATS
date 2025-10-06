@@ -4,6 +4,7 @@ import os
 import asyncio
 import logging
 import json
+import copy
 
 from automation_server_client import Workqueue
 
@@ -23,7 +24,7 @@ def retrieve_items_for_queue() -> list[dict]:
 
     db_conn_string = os.getenv("DBCONNECTIONSTRINGPROD")
 
-    form_config = config.MODERSMAAL_CONFIG
+    form_config = copy.deepcopy(config.MODERSMAAL_CONFIG)
 
     ### FOR DEV TESTING ONLY - OVERRIDE SITE AND FOLDER NAME TO AVOID POLLUTING ACTUAL FOLDERS ###
     # testing = True
